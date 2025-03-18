@@ -1,23 +1,13 @@
-import windowChanger from "./injected-helper"
+import { InjectionService } from "./services/InjectionService"
 
-const inject = async (tabId: number) => {
-  chrome.scripting.executeScript(
-    {
-      target: {
-        tabId
-      },
-      world: "MAIN", // MAIN in order to access the window object
-      func: windowChanger
-    },
-    () => {
-      console.log("Background script got callback after injection")
-    }
-  )
-}
+const injectionService = new InjectionService()
 
-// Simple example showing how to inject.
-// You can inject however you'd like to, doesn't have
-// to be with chrome.tabs.onActivated
 chrome.tabs.onActivated.addListener((e) => {
-  inject(e.tabId)
+  injectionService.inject(e.tabId)
+})
+
+chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
+  if (changeInfo.status === "complete") {
+    injectionService.inject(tabId)
+  }
 })

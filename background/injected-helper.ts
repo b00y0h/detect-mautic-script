@@ -1,20 +1,22 @@
+interface CustomWindow extends Window {
+  eab: {
+    author: string
+    domain: string
+  }
+  MauticDomain?: string
+}
+
+declare let window: CustomWindow
+
 export default function windowChanger() {
-  const anotherFunc = (): number => {
-    return 42
+  const checkForMauticDomain = (): string => {
+    return window.MauticDomain || ""
   }
 
-  // Here's an example where we can reference the window object
-  // and add a new property to it
-  window.hello = {
-    world: "from injected content script",
-
-    coolNumber: anotherFunc()
-    // you can call other functions from the injected script
-    // but they must be declared inside the injected function
-    // or be present in the global scope
+  window.eab = {
+    author: "Bob Smith",
+    domain: checkForMauticDomain()
   }
 
-  // Here's an example where we show you can reference the DOM
-  // This console.log will show within the tab you injected into
-  console.log(document.getElementsByTagName("html"))
+  return window.eab
 }
