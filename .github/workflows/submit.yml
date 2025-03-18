@@ -17,8 +17,17 @@ jobs:
       - name: Install projects deps
         run: pnpm install
 
+      - name: Build the extension into a zip artifact
+        run: pnpm build
+
+      - name: List files after build (debug)
+        run: ls -l build/ # see if the zip is there.
+
       - name: Package the extension into a zip artifact
         run: pnpm package
+
+      - name: List files after package (debug)
+        run: ls -l build/ # or wherever you expect the zip
 
       - name: Browser Platform Publish
         uses: PlasmoHQ/bpp@v3
