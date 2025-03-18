@@ -27,7 +27,6 @@
   "manifest": {
     "permissions": [
       "scripting",
-      "webNavigation",
       "activeTab",
       "storage"
     ],
