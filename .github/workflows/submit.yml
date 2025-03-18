@@ -6,33 +6,16 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
-
-      - name: Set up Node.js (Explicit Version)
-        uses: actions/setup-node@v3
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
         with:
-          node-version: 16.x # Specify a fixed version for consistency
-          cache: "pnpm"
+          node-version: 20
 
-      - name: Set up pnpm (using npm install -g)
-        run: npm install -g pnpm@latest # Install pnpm globally
+      - name: Install Pnpm
+        run: npm install -g pnpm@9.15.2
 
-      - name: Add pnpm to PATH (Important!)
-        run: echo "$HOME/.npm-global/bin" >> $GITHUB_PATH
-
-      - name: Cache pnpm modules
-        uses: actions/cache@v3
-        with:
-          path: ~/.pnpm-store
-          key: ${{ runner.os }}-${{ hashFiles('**/pnpm-lock.yaml') }}
-          restore-keys: |
-            ${{ runner.os }}-
-
-      - name: Install dependencies
+      - name: Install projects deps
         run: pnpm install
-
-      - name: Build the extension
-        run: pnpm build
 
       - name: Package the extension into a zip artifact
         run: pnpm package
