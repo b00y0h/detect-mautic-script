@@ -1,22 +1,28 @@
 interface CustomWindow extends Window {
-  eab: {
-    author: string
-    domain: string
+  detectMautic: {
+    eab: {
+      author: string
+      domain: string
+    }
+    MauticDomain?: string
   }
-  MauticDomain?: string
 }
 
 declare let window: CustomWindow
 
 export default function windowChanger() {
-  const checkForMauticDomain = (): string => {
-    return window.MauticDomain || ""
+  if (!window.detectMautic) {
+    window.detectMautic = {} as any
   }
 
-  window.eab = {
+  const checkForMauticDomain = (): string => {
+    return window.detectMautic.MauticDomain || ""
+  }
+
+  window.detectMautic.eab = {
     author: "Bob Smith",
     domain: checkForMauticDomain()
   }
 
-  return window.eab
+  return window.detectMautic.eab
 }
