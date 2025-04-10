@@ -1,7 +1,7 @@
 {
   "name": "detect-mautic-exists",
   "displayName": "Detect the existence of ACS script",
-  "version": "0.0.1",
+  "version": "0.1.0",
   "description": "Detect the existence of ACS script",
   "author": "Bob Smith <reversetype@gmail.com>",
   "scripts": {
@@ -11,6 +11,8 @@
   },
   "dependencies": {
     "@plasmohq/storage": "^1.15.0",
+    "add": "^2.0.6",
+    "date-fns": "^4.1.0",
     "plasmo": "0.90.3",
     "react": "18.2.0",
     "react-dom": "18.2.0"
@@ -21,14 +23,18 @@
     "@types/node": "20.11.5",
     "@types/react": "18.2.48",
     "@types/react-dom": "18.2.18",
+    "autoprefixer": "^10.4.16",
+    "postcss": "^8.4.33",
     "prettier": "3.2.4",
+    "tailwindcss": "^3.4.1",
     "typescript": "5.3.3"
   },
   "manifest": {
     "permissions": [
       "scripting",
       "activeTab",
-      "storage"
+      "storage",
+      "webRequest"
     ],
     "host_permissions": [
       "*://*/*",
