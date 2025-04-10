@@ -6,7 +6,7 @@
   "author": "Bob Smith <reversetype@gmail.com>",
   "scripts": {
     "dev": "plasmo dev",
-    "build": "plasmo build",
+    "build": "cross-env PARCEL_WORKER_BACKEND=process plasmo build",
     "package": "plasmo package"
   },
   "dependencies": {
@@ -24,6 +24,7 @@
     "@types/react": "18.2.48",
     "@types/react-dom": "18.2.18",
     "autoprefixer": "^10.4.16",
+    "cross-env": "^7.0.3",
     "postcss": "^8.4.33",
     "prettier": "3.2.4",
     "tailwindcss": "^3.4.1",
