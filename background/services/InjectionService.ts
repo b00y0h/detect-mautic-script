@@ -7,15 +7,18 @@ export class InjectionService {
   private badgeService: BadgeService
 
   constructor() {
+    console.debug("Initializing InjectionService")
     this.storageService = new StorageService()
     this.badgeService = new BadgeService()
   }
 
   async inject(tabId: number) {
-    await this.storageService.initializeEmptyValues()
+    console.debug("Starting injection for tab:", tabId)
+    await this.storageService.initializeStorage()
 
     const tab = await chrome.tabs.get(tabId)
     const currentUrl = tab.url || ""
+    console.debug("Injecting into URL:", currentUrl)
 
     chrome.scripting.executeScript(
       {
@@ -25,19 +28,36 @@ export class InjectionService {
       },
       async (injectionResults) => {
         if (chrome.runtime.lastError) {
+          console.error("Injection error:", chrome.runtime.lastError)
           this.badgeService.setError(tabId)
           return
         }
 
-        const result = injectionResults?.[0]?.result
-        if (result?.domain) {
-          this.badgeService.setSuccess(tabId, result.domain)
-          await this.storageService.saveInjectionResults(
-            result.domain,
-            result.author,
-            currentUrl
-          )
+        const result = await injectionResults?.[0]?.result
+        console.debug("Injection results:", result)
+
+        if (result?.trackingInfo?.length > 0) {
+          // Use first tracker's domain for the badge
+          const firstTracker = result.trackingInfo[0]
+          const mainDomain = firstTracker?.domain || "unknown"
+          console.debug("Detected Mautic domains:", result.trackingInfo)
+
+          this.badgeService.setSuccess(tabId, mainDomain)
+
+          // Save all results at once
+          try {
+            await this.storageService.saveInjectionResults(
+              mainDomain,
+              result.author,
+              currentUrl,
+              result.trackingInfo,
+              result.title || "Untitled Page" // Pass the page title
+            )
+          } catch (error) {
+            console.error("Error saving injection results:", error)
+          }
         } else {
+          console.debug("No Mautic trackers found")
           this.badgeService.setNotFound(tabId)
         }
       }
