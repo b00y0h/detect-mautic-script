@@ -1,7 +1,9 @@
 /** @type {import('tailwindcss').Config} */
 module.exports = {
+  darkMode: "class",
   content: [
-    "./popup.tsx",
+    "./popup-old.tsx",
+    "./sidepanel.tsx",
     "./background/**/*.{ts,tsx}",
     "./components/**/*.{ts,tsx}",
     "./assets/**/*.{ts,tsx}",
@@ -17,17 +19,17 @@ module.exports = {
       },
       colors: {
         primary: {
-          50: "#f0f9ff",
-          100: "#e0f2fe",
-          200: "#bae6fd",
-          300: "#7dd3fc",
-          400: "#38bdf8",
-          500: "#0ea5e9",
-          600: "#0284c7",
-          700: "#0369a1",
-          800: "#075985",
-          900: "#0c4a6e",
-          950: "#082f49"
+          50: "#e6eef4",
+          100: "#ccdde9",
+          200: "#99bbcf",
+          300: "#6699b4",
+          400: "#33779a",
+          500: "#00557f", // Lighter version
+          600: "#004466", // Base color close to your image
+          700: "#00334d",
+          800: "#002233",
+          900: "#00111a",
+          950: "#000d14"
         },
         secondary: {
           50: "#f8fafc",

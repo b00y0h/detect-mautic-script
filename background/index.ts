@@ -5,6 +5,9 @@ import { StorageService } from "./services/StorageService"
 const injectionService = new InjectionService()
 const storageService = new StorageService()
 
+// Configure side panel to open when clicking the extension icon
+chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true })
+
 // Listen for URL changes
 chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
   if (changeInfo.status === "complete" && tab.url?.startsWith("http")) {
