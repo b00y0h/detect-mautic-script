@@ -87,13 +87,13 @@ chrome.webRequest.onBeforeRedirect.addListener(
   function (details) {
     if (details.url.includes("/mtc.js")) {
       const domain = new URL(details.url).origin
-      console.log(
-        "🚀 Redirect:",
-        details.url,
-        details.statusCode,
-        "->",
-        details.redirectUrl
-      )
+      // console.log(
+      //   "🚀 Redirect:",
+      //   details.url,
+      //   details.statusCode,
+      //   "->",
+      //   details.redirectUrl
+      // )
       domainStatusMap.set(domain, details.statusCode)
     }
   },
