@@ -3,6 +3,7 @@ import { Storage } from "@plasmohq/storage"
 import type {
   CurrentPageDomains,
   DomainPages,
+  DomainStatus,
   MauticData,
   PageEntry,
   StorageStructure
@@ -135,7 +136,7 @@ export class StorageService {
     }
   }
 
-  async getCurrentPageDomains(url: string): Promise<string[]> {
+  async getCurrentPageDomains(url: string): Promise<DomainStatus[]> {
     const normalizedUrl = this.normalizeUrl(url)
     const currentPageDomains = await this.storage.get<CurrentPageDomains>(
       StorageService.STORAGE_KEYS.currentPageDomains
@@ -161,17 +162,25 @@ export class StorageService {
     const normalizedUrl = this.normalizeUrl(currentUrl)
 
     try {
-      // Save Mautic data
+      // Save Mautic data first
       await this.saveMauticData(currentUrl, {
         domain,
         author,
         trackingInfo
       })
 
-      // Save current page domains - store only the current page
-      const domains = trackingInfo
-        .map((tracker) => tracker.domain)
-        .filter((domain): domain is string => domain !== null)
+      // Convert tracking info to domain statuses, preserving status codes
+      const domains: DomainStatus[] = trackingInfo
+        .filter(
+          (tracker): tracker is { domain: string; statusCode?: number } =>
+            tracker.domain !== null
+        )
+        .map((tracker) => ({
+          url: tracker.domain,
+          status: tracker.statusCode ?? 0 // Use nullish coalescing
+        }))
+
+      console.debug("Saving domains with status codes:", domains)
 
       const currentPageDomains = {
         [normalizedUrl]: {
@@ -185,7 +194,7 @@ export class StorageService {
         currentPageDomains
       )
 
-      // Save domain pages data for each domain
+      // Save domain pages data
       const domainPages =
         (await this.storage.get<DomainPages>(
           StorageService.STORAGE_KEYS.domainPages
@@ -198,7 +207,8 @@ export class StorageService {
       }
 
       // Update entries for each detected domain
-      for (const trackerDomain of domains) {
+      for (const domainInfo of domains) {
+        const trackerDomain = domainInfo.url
         if (!domainPages[trackerDomain]) {
           domainPages[trackerDomain] = []
         }

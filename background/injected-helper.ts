@@ -8,6 +8,7 @@ interface CustomWindow extends Window {
       title: string
       trackingInfo: Array<{
         domain: string | null
+        statusCode?: number
       }>
     }
     MauticDomain?: string
@@ -23,8 +24,11 @@ export default function windowChanger() {
     window.detectMautic = {} as any
   }
 
-  const findMauticTrackers = (): Array<{ domain: string | null }> => {
-    const trackingInfo: Array<{ domain: string | null }> = []
+  const findMauticTrackers = async (): Promise<
+    Array<{ domain: string | null; statusCode?: number }>
+  > => {
+    const trackingInfo: Array<{ domain: string | null; statusCode?: number }> =
+      []
 
     // Find all script elements with Mautic initialization
     const scripts = Array.from(document.querySelectorAll("script"))
@@ -46,7 +50,7 @@ export default function windowChanger() {
     )
 
     // Extract information from each tracking script
-    trackingScripts.forEach((script) => {
+    for (const script of trackingScripts) {
       const content = script.textContent || ""
       const domainMatch = content.match(/["'](https:\/\/[^"']+\/mtc\.js)["']/)
       const domain = domainMatch ? new URL(domainMatch[1]).origin : null
@@ -55,21 +59,21 @@ export default function windowChanger() {
         console.debug("Extracted Mautic domain:", domain)
         trackingInfo.push({ domain })
       }
-    })
+    }
 
     console.debug("Final tracking info:", trackingInfo)
     return trackingInfo
   }
 
-  const trackingInfo = findMauticTrackers()
-
-  window.detectMautic.eab = {
-    author: "Bob Smith",
-    domain: window.location.origin,
-    title: document.title,
-    trackingInfo
+  const getTrackingInfo = async () => {
+    const trackingInfo = await findMauticTrackers()
+    return {
+      author: "Bob Smith",
+      domain: window.location.origin,
+      title: document.title,
+      trackingInfo
+    }
   }
 
-  console.debug("Returning detection results:", window.detectMautic.eab)
-  return window.detectMautic.eab
+  return getTrackingInfo()
 }

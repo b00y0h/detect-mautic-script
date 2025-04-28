@@ -1,5 +1,6 @@
 export interface TrackerInfo {
   domain: string | null
+  statusCode?: number // Add status code information
 }
 
 export interface MauticData {
@@ -19,9 +20,14 @@ export interface DomainPages {
   [domain: string]: PageEntry[]
 }
 
+export interface DomainStatus {
+  url: string
+  status: number
+}
+
 export interface CurrentPageDomains {
   [url: string]: {
-    domains: string[]
+    domains: DomainStatus[]
     timestamp: number
   }
 }

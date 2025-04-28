@@ -3,11 +3,16 @@ import { useEffect, useState } from "react"
 
 import { Storage } from "@plasmohq/storage"
 
-import type { CurrentPageDomains, DomainPages } from "~types/storage"
+import type {
+  CurrentPageDomains,
+  DomainPages,
+  DomainStatus
+} from "~types/storage"
 
 import "./style.css"
 
 import Header from "~components/header"
+import StatusBadge from "~components/StatusBadge"
 
 const STORAGE_KEYS = {
   currentPageDomains: "currentPageDomains",
@@ -15,7 +20,7 @@ const STORAGE_KEYS = {
 }
 
 interface CurrentPage {
-  domains: string[]
+  domains: DomainStatus[]
   timestamp: number
 }
 
@@ -57,6 +62,7 @@ export default function SidePanel() {
       const currentPageDomains = await storage.get<CurrentPageDomains>(
         STORAGE_KEYS.currentPageDomains
       )
+
       if (currentPageDomains?.[normalizedUrl]) {
         setCurrentPage(currentPageDomains[normalizedUrl])
       }
@@ -119,7 +125,8 @@ export default function SidePanel() {
                     <li
                       key={index}
                       className="bg-primary-50 dark:bg-gray-800 p-2 rounded border border-primary-200 dark:border-gray-700 dark:text-gray-200">
-                      {domain}
+                      {domain.url}
+                      {/* <StatusBadge statusCode={domain.status} /> */}
                     </li>
                   ))}
                 </ul>
@@ -150,41 +157,45 @@ export default function SidePanel() {
             </div>
             {Object.keys(domainPages).length > 0 ? (
               <div className="space-y-4">
-                {Object.entries(domainPages).map(([domain, pages]) => (
-                  <div
-                    key={domain}
-                    className="bg-primary-50 dark:bg-gray-800 p-3 rounded border border-primary-200 dark:border-gray-700">
-                    <h3 className="font-semibold text-primary-700 dark:text-gray-200">
-                      {domain}
-                    </h3>
-                    <ul className="mt-2 space-y-2">
-                      {pages.slice(0, 3).map((page, index) => (
-                        <li key={index} className="text-sm">
-                          <span className="text-primary-700 dark:text-gray-300 font-medium block">
-                            {page.title || "Untitled Page"}
-                          </span>
-                          <span className="text-secondary-700 dark:text-gray-400 truncate block text-xs">
-                            <a
-                              href={page.url}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="hover:text-primary-600 dark:hover:text-blue-400 hover:underline">
-                              {page.url}
-                            </a>
-                          </span>
-                          <span className="block text-secondary-400 dark:text-gray-500 text-xs">
-                            {formatTimeAgo(page.timestamp)}
-                          </span>
-                        </li>
-                      ))}
-                      {pages.length > 3 && (
-                        <li className="text-sm text-secondary-500 dark:text-gray-400 italic">
-                          ...and {pages.length - 3} more pages
-                        </li>
-                      )}
-                    </ul>
-                  </div>
-                ))}
+                {Object.entries(domainPages).map(([domain, pages]) => {
+                  return (
+                    <div
+                      key={domain}
+                      className="bg-primary-50 dark:bg-gray-800 p-3 rounded border border-primary-200 dark:border-gray-700">
+                      <h3 className="font-semibold text-primary-700 dark:text-gray-200">
+                        {domain}
+                      </h3>
+                      <ul className="mt-2 space-y-2">
+                        {pages.slice(0, 3).map((page, index) => {
+                          return (
+                            <li key={index} className="text-sm">
+                              <span className="text-primary-700 dark:text-gray-300 font-medium block">
+                                {page.title || "Untitled Page"}
+                              </span>
+                              <span className="text-secondary-700 dark:text-gray-400 truncate block text-xs">
+                                <a
+                                  href={page.url}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="hover:text-primary-600 dark:hover:text-blue-400 hover:underline">
+                                  {page.url}
+                                </a>
+                              </span>
+                              <span className="block text-secondary-400 dark:text-gray-500 text-xs">
+                                {formatTimeAgo(page.timestamp)}
+                              </span>
+                            </li>
+                          )
+                        })}
+                        {pages.length > 3 && (
+                          <li className="text-sm text-secondary-500 dark:text-gray-400 italic">
+                            ...and {pages.length - 3} more pages
+                          </li>
+                        )}
+                      </ul>
+                    </div>
+                  )
+                })}
               </div>
             ) : (
               <p className="text-secondary-600 dark:text-gray-400">
