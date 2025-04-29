@@ -39,6 +39,7 @@ export default function SidePanel() {
   const [domainPages, setDomainPages] = useState<DomainPages>({})
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState("")
+  const [currentUrl, setCurrentUrl] = useState<string>("")
 
   const loadData = async () => {
     try {
@@ -51,30 +52,33 @@ export default function SidePanel() {
         currentWindow: true
       })
 
-      if (!tab.url) {
-        throw new Error("No URL found for current tab")
+      const tabUrl = tab?.url
+      if (!tabUrl || !tabUrl.startsWith("http")) {
+        setCurrentUrl("")
+        setCurrentPage(null)
+      } else {
+        // Normalize the URL to match storage format
+        const normalizedUrl = normalizeUrl(tabUrl)
+        setCurrentUrl(normalizedUrl)
+
+        // Get current page domains
+        const currentPageDomains = await storage.get<CurrentPageDomains>(
+          STORAGE_KEYS.currentPageDomains
+        )
+
+        if (currentPageDomains?.[normalizedUrl]) {
+          setCurrentPage(currentPageDomains[normalizedUrl])
+        } else {
+          setCurrentPage(null)
+        }
       }
 
-      // Normalize the URL to match storage format
-      const normalizedUrl = normalizeUrl(tab.url)
-
-      // Get current page domains
-      const currentPageDomains = await storage.get<CurrentPageDomains>(
-        STORAGE_KEYS.currentPageDomains
-      )
-
-      if (currentPageDomains?.[normalizedUrl]) {
-        setCurrentPage(currentPageDomains[normalizedUrl])
-      }
-
-      // Get all domain pages data
+      // Get domain pages data regardless of current URL
       const pages = await storage.get<DomainPages>(STORAGE_KEYS.domainPages)
-      if (pages) {
-        setDomainPages(pages)
-      }
+      setDomainPages(pages || {})
+      setError("") // Clear any previous errors
     } catch (err) {
-      setError("Error retrieving Mautic data")
-      console.error(err)
+      setError(err.message || "Error retrieving Mautic/ACS data")
     } finally {
       setIsLoading(false)
     }
@@ -82,6 +86,36 @@ export default function SidePanel() {
 
   useEffect(() => {
     loadData()
+
+    // Set up storage change listener
+    const storage = new Storage({ area: "local" })
+    const handleStorageChange = (changes: { [key: string]: any }) => {
+      loadData()
+    }
+
+    // Watch both storage keys
+    storage.watch({
+      [STORAGE_KEYS.currentPageDomains]: handleStorageChange,
+      [STORAGE_KEYS.domainPages]: handleStorageChange
+    })
+
+    const tabChangeListener = () => {
+      loadData()
+    }
+
+    // Listen for tab changes
+    chrome.tabs.onActivated.addListener(tabChangeListener)
+    chrome.tabs.onUpdated.addListener(tabChangeListener)
+
+    // Clean up listeners on unmount
+    return () => {
+      storage.unwatch({
+        [STORAGE_KEYS.currentPageDomains]: handleStorageChange,
+        [STORAGE_KEYS.domainPages]: handleStorageChange
+      })
+      chrome.tabs.onActivated.removeListener(tabChangeListener)
+      chrome.tabs.onUpdated.removeListener(tabChangeListener)
+    }
   }, [])
 
   const handleClearHistory = async () => {
@@ -92,7 +126,6 @@ export default function SidePanel() {
       setError("")
     } catch (err) {
       setError("Error clearing history")
-      console.error(err)
     }
   }
 
@@ -102,10 +135,6 @@ export default function SidePanel() {
 
   if (isLoading) {
     return <div className="p-4 dark:text-gray-200">Loading...</div>
-  }
-
-  if (error) {
-    return <div className="p-4 text-error dark:text-red-400">{error}</div>
   }
 
   return (
@@ -118,30 +147,38 @@ export default function SidePanel() {
             <h2 className="text-lg font-bold mb-2 text-primary-900 dark:text-gray-100">
               Current Page Trackers
             </h2>
-            {currentPage?.domains?.length ? (
-              <>
-                <ul className="space-y-2">
-                  {currentPage.domains.map((domain, index) => (
-                    <li
-                      key={index}
-                      className="bg-primary-50 dark:bg-gray-800 p-2 rounded border border-primary-200 dark:border-gray-700 dark:text-gray-200">
-                      {domain.url}
-                      {/* <StatusBadge statusCode={domain.status} /> */}
-                    </li>
-                  ))}
-                </ul>
-                <p className="text-sm text-secondary-500 dark:text-gray-400 mt-2">
-                  Detected {formatTimeAgo(currentPage.timestamp)}
+            {error ? (
+              <p className="text-error dark:text-red-400 mb-2">{error}</p>
+            ) : currentUrl ? (
+              currentPage?.domains?.length > 0 ? (
+                <>
+                  <ul className="space-y-2">
+                    {currentPage.domains.map((domain, index) => (
+                      <li
+                        key={index}
+                        className="bg-primary-50 dark:bg-gray-800 p-2 rounded border border-primary-200 dark:border-gray-700 dark:text-gray-200">
+                        {domain.url}
+                        <StatusBadge statusCode={domain.status} />
+                      </li>
+                    ))}
+                  </ul>
+                  <p className="text-sm text-secondary-500 dark:text-gray-400 mt-2">
+                    Detected {formatTimeAgo(currentPage.timestamp)}
+                  </p>
+                </>
+              ) : (
+                <p className="text-secondary-600 dark:text-gray-400">
+                  No Mautic/ACS trackers detected on this page
                 </p>
-              </>
+              )
             ) : (
               <p className="text-secondary-600 dark:text-gray-400">
-                No Mautic trackers detected on this page
+                Please navigate to a webpage to detect Mautic/ACS trackers
               </p>
             )}
           </section>
 
-          {/* All Mautic domains and their pages */}
+          {/* History */}
           <section>
             <div className="flex justify-between items-center mb-2">
               <h2 className="text-lg font-bold text-primary-900 dark:text-gray-100">
@@ -157,51 +194,69 @@ export default function SidePanel() {
             </div>
             {Object.keys(domainPages).length > 0 ? (
               <div className="space-y-4">
-                {Object.entries(domainPages).map(([domain, pages]) => {
-                  return (
-                    <div
-                      key={domain}
-                      className="bg-primary-50 dark:bg-gray-800 p-3 rounded border border-primary-200 dark:border-gray-700">
-                      <h3 className="font-semibold text-primary-700 dark:text-gray-200">
-                        {domain}
-                      </h3>
-                      <ul className="mt-2 space-y-2">
-                        {pages.slice(0, 3).map((page, index) => {
-                          return (
-                            <li key={index} className="text-sm">
-                              <span className="text-primary-700 dark:text-gray-300 font-medium block">
-                                {page.title || "Untitled Page"}
-                              </span>
-                              <span className="text-secondary-700 dark:text-gray-400 truncate block text-xs">
-                                <a
-                                  href={page.url}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="hover:text-primary-600 dark:hover:text-blue-400 hover:underline">
-                                  {page.url}
-                                </a>
-                              </span>
-                              <span className="block text-secondary-400 dark:text-gray-500 text-xs">
-                                {formatTimeAgo(page.timestamp)}
-                              </span>
-                            </li>
-                          )
-                        })}
-                        {pages.length > 3 && (
-                          <li className="text-sm text-secondary-500 dark:text-gray-400 italic">
-                            ...and {pages.length - 3} more pages
+                {Object.entries(domainPages).map(([domain, pages]) => (
+                  <div
+                    key={domain}
+                    className="bg-primary-50 dark:bg-gray-800 p-3 rounded border border-primary-200 dark:border-gray-700">
+                    <h3 className="font-semibold text-primary-700 dark:text-gray-200">
+                      {domain}
+                    </h3>
+                    <ul className="mt-2 space-y-2">
+                      {[...pages]
+                        .sort((a, b) => b.timestamp - a.timestamp)
+                        .slice(0, 3)
+                        .map((page, index) => (
+                          <li key={index} className="text-sm">
+                            <span className="text-primary-700 dark:text-gray-300 font-medium block">
+                              {page.title || "Untitled Page"}
+                            </span>
+                            <span className="text-secondary-700 dark:text-gray-400 truncate block text-xs">
+                              <a
+                                href={page.url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="hover:text-primary-600 dark:hover:text-blue-400 hover:underline">
+                                {page.url}
+                              </a>
+                            </span>
+                            <span className="block text-secondary-400 dark:text-gray-500 text-xs">
+                              {formatTimeAgo(page.timestamp)}
+                            </span>
                           </li>
-                        )}
-                      </ul>
-                    </div>
-                  )
-                })}
+                        ))}
+                      {pages.length > 3 && (
+                        <li className="text-sm text-secondary-500 dark:text-gray-400 italic">
+                          ...and {pages.length - 3} more pages
+                        </li>
+                      )}
+                    </ul>
+                  </div>
+                ))}
               </div>
             ) : (
               <p className="text-secondary-600 dark:text-gray-400">
-                No Mautic domains detected yet
+                No history available
               </p>
             )}
+          </section>
+
+          {/* Debug info */}
+          <section className="mt-4 p-2 bg-gray-100 dark:bg-gray-800 rounded text-xs">
+            <details>
+              <summary className="cursor-pointer">Debug Info</summary>
+              <pre className="mt-2 overflow-x-auto">
+                {JSON.stringify(
+                  {
+                    currentUrl,
+                    currentPage,
+                    domainPagesCount: Object.keys(domainPages).length,
+                    timestamp: Date.now()
+                  },
+                  null,
+                  2
+                )}
+              </pre>
+            </details>
           </section>
         </div>
       </div>

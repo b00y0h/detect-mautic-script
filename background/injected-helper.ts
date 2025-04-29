@@ -19,7 +19,7 @@ interface CustomWindow extends Window {
 declare let window: CustomWindow
 
 export default function windowChanger() {
-  console.debug("Starting Mautic detection in page")
+  // console.log("Starting Mautic detection in page")
   if (!window.detectMautic) {
     window.detectMautic = {} as any
   }
@@ -29,39 +29,92 @@ export default function windowChanger() {
   > => {
     const trackingInfo: Array<{ domain: string | null; statusCode?: number }> =
       []
+    const processedDomains = new Set<string>()
 
-    // Find all script elements with Mautic initialization
+    // Find all script elements
     const scripts = Array.from(document.querySelectorAll("script"))
-    console.debug("Analyzing", scripts.length, "scripts on page")
+    // console.log("Analyzing", scripts.length, "scripts on page")
 
-    const trackingScripts = scripts.filter((script) => {
-      const content = script.textContent || ""
-      const hasMautic = content.includes("MauticTrackingObject")
-      if (hasMautic) {
-        console.debug("Found script with MauticTrackingObject:", content)
-      }
-      return hasMautic
-    })
-
-    console.debug(
-      "Found",
-      trackingScripts.length,
-      "potential Mautic tracking scripts"
-    )
-
-    // Extract information from each tracking script
-    for (const script of trackingScripts) {
-      const content = script.textContent || ""
-      const domainMatch = content.match(/["'](https:\/\/[^"']+\/mtc\.js)["']/)
-      const domain = domainMatch ? new URL(domainMatch[1]).origin : null
-
-      if (domain) {
-        console.debug("Extracted Mautic domain:", domain)
-        trackingInfo.push({ domain })
+    // First check for src attributes containing mtc.js
+    for (const script of scripts) {
+      const src = script.getAttribute("src")
+      if (src?.includes("/mtc.js")) {
+        try {
+          const domain = new URL(src).origin
+          if (!processedDomains.has(domain)) {
+            // console.log("Found Mautic script via src:", src)
+            trackingInfo.push({ domain })
+            processedDomains.add(domain)
+          }
+        } catch (e) {
+          // console.error("Error parsing script src URL:", e)
+        }
       }
     }
 
-    console.debug("Final tracking info:", trackingInfo)
+    // Then check script contents for Mautic initialization
+    for (const script of scripts) {
+      const content = script.textContent || ""
+      if (content.includes("MauticTrackingObject")) {
+        const domainMatch = content.match(/["'](https:\/\/[^"']+\/mtc\.js)["']/)
+        if (domainMatch) {
+          try {
+            const domain = new URL(domainMatch[1]).origin
+            if (!processedDomains.has(domain)) {
+              // console.log("Found Mautic script via initialization:", domain)
+              trackingInfo.push({ domain })
+              processedDomains.add(domain)
+            }
+          } catch (e) {
+            // console.error("Error parsing domain from content:", e)
+          }
+        }
+      }
+    }
+
+    // Look for other Mautic indicators (forms, etc.)
+    const forms = document.querySelectorAll("form")
+    for (const form of forms) {
+      const formAction = form.getAttribute("action") || ""
+      const formClass = form.getAttribute("class") || ""
+
+      if (
+        formClass.includes("mauticform") ||
+        formAction.includes("/form/submit") ||
+        formAction.includes("/mautic/")
+      ) {
+        try {
+          const formDomain = new URL(formAction).origin
+          if (!processedDomains.has(formDomain)) {
+            // console.log("Found Mautic form:", formAction)
+            trackingInfo.push({ domain: formDomain })
+            processedDomains.add(formDomain)
+          }
+        } catch (e) {
+          // console.error("Error parsing form action URL:", e)
+        }
+      }
+    }
+
+    // Check for Mautic tracking pixel
+    const images = document.querySelectorAll("img")
+    for (const img of images) {
+      const src = img.getAttribute("src") || ""
+      if (src.includes("/mtracking.gif")) {
+        try {
+          const domain = new URL(src).origin
+          if (!processedDomains.has(domain)) {
+            // console.log("Found Mautic tracking pixel:", src)
+            trackingInfo.push({ domain })
+            processedDomains.add(domain)
+          }
+        } catch (e) {
+          // console.error("Error parsing tracking pixel URL:", e)
+        }
+      }
+    }
+
+    // console.log("Final tracking info:", trackingInfo)
     return trackingInfo
   }
 

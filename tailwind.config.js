@@ -2,7 +2,6 @@
 module.exports = {
   darkMode: "class",
   content: [
-    "./popup-old.tsx",
     "./sidepanel.tsx",
     "./background/**/*.{ts,tsx}",
     "./components/**/*.{ts,tsx}",
