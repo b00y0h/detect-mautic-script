@@ -1,27 +1,18 @@
-import { formatDistance } from "date-fns"
-import { useEffect, useState } from "react"
+import { useCallback, useLayoutEffect, useRef, useState } from "react"
 
 import { Storage } from "@plasmohq/storage"
 
-import type {
-  CurrentPageDomains,
-  DomainPages,
-  DomainStatus
-} from "~types/storage"
+import type { CurrentPageDomains, DomainPages } from "~types/storage"
 
 import "./style.css"
 
+import CurrentPageTrackers from "~components/CurrentPageTrackers"
 import Header from "~components/header"
-import StatusBadge from "~components/StatusBadge"
+import History from "~components/History"
 
 const STORAGE_KEYS = {
   currentPageDomains: "currentPageDomains",
   domainPages: "domainPages"
-}
-
-interface CurrentPage {
-  domains: DomainStatus[]
-  timestamp: number
 }
 
 function normalizeUrl(url: string): string {
@@ -35,229 +26,149 @@ function normalizeUrl(url: string): string {
 }
 
 export default function SidePanel() {
-  const [currentPage, setCurrentPage] = useState<CurrentPage | null>(null)
-  const [domainPages, setDomainPages] = useState<DomainPages>({})
-  const [isLoading, setIsLoading] = useState(true)
-  const [error, setError] = useState("")
-  const [currentUrl, setCurrentUrl] = useState<string>("")
+  const loadingRef = useRef(false)
+  const currentUrlRef = useRef("")
+  const debounceTimerRef = useRef<NodeJS.Timeout>()
 
-  const loadData = async () => {
+  // Split state into smaller pieces to minimize re-renders
+  const [currentPageState, setCurrentPageState] = useState({
+    currentPage: null,
+    currentUrl: "",
+    error: "",
+    isLoading: true
+  })
+  const [historyState, setHistoryState] = useState<{
+    domainPages: DomainPages
+  }>({
+    domainPages: {}
+  })
+
+  const loadData = useCallback(async () => {
+    if (loadingRef.current) {
+      return
+    }
+
+    loadingRef.current = true
+    setCurrentPageState((prev) => ({ ...prev, isLoading: true }))
+
     try {
-      setIsLoading(true)
       const storage = new Storage({ area: "local" })
-
-      // Get current tab URL
       const [tab] = await chrome.tabs.query({
         active: true,
         currentWindow: true
       })
 
       const tabUrl = tab?.url
+
       if (!tabUrl || !tabUrl.startsWith("http")) {
-        setCurrentUrl("")
-        setCurrentPage(null)
-      } else {
-        // Normalize the URL to match storage format
-        const normalizedUrl = normalizeUrl(tabUrl)
-        setCurrentUrl(normalizedUrl)
-
-        // Get current page domains
-        const currentPageDomains = await storage.get<CurrentPageDomains>(
-          STORAGE_KEYS.currentPageDomains
-        )
-
-        if (currentPageDomains?.[normalizedUrl]) {
-          setCurrentPage(currentPageDomains[normalizedUrl])
-        } else {
-          setCurrentPage(null)
-        }
+        setCurrentPageState((prev) => ({
+          ...prev,
+          currentUrl: "",
+          currentPage: null,
+          error: "",
+          isLoading: false
+        }))
+        return
       }
 
-      // Get domain pages data regardless of current URL
-      const pages = await storage.get<DomainPages>(STORAGE_KEYS.domainPages)
-      setDomainPages(pages || {})
-      setError("") // Clear any previous errors
-    } catch (err) {
-      setError(err.message || "Error retrieving Mautic/ACS data")
-    } finally {
-      setIsLoading(false)
-    }
-  }
+      const normalizedUrl = normalizeUrl(tabUrl)
+      currentUrlRef.current = normalizedUrl
 
-  useEffect(() => {
+      const [currentPageDomains, pages] = await Promise.all([
+        storage.get<CurrentPageDomains>(STORAGE_KEYS.currentPageDomains),
+        storage.get<DomainPages>(STORAGE_KEYS.domainPages)
+      ])
+
+      if (currentUrlRef.current === normalizedUrl) {
+        setCurrentPageState((prev) => ({
+          currentUrl: normalizedUrl,
+          currentPage: currentPageDomains?.[normalizedUrl] || null,
+          error: "",
+          isLoading: false
+        }))
+
+        setHistoryState({
+          domainPages: pages || {}
+        })
+      }
+    } catch (err) {
+      setCurrentPageState((prev) => ({
+        ...prev,
+        error: err.message || "Error retrieving Mautic/ACS data",
+        isLoading: false
+      }))
+    } finally {
+      loadingRef.current = false
+    }
+  }, [])
+
+  useLayoutEffect(() => {
     loadData()
 
-    // Set up storage change listener
     const storage = new Storage({ area: "local" })
-    const handleStorageChange = (changes: { [key: string]: any }) => {
-      loadData()
+
+    const handleStorageChange = () => {
+      clearTimeout(debounceTimerRef.current)
+      debounceTimerRef.current = setTimeout(() => {
+        loadData()
+      }, 150)
     }
 
-    // Watch both storage keys
+    const handleTabChange = () => {
+      if (!loadingRef.current) {
+        setCurrentPageState((prev) => ({ ...prev, isLoading: true }))
+      }
+      handleStorageChange()
+    }
+
     storage.watch({
       [STORAGE_KEYS.currentPageDomains]: handleStorageChange,
       [STORAGE_KEYS.domainPages]: handleStorageChange
     })
 
-    const tabChangeListener = () => {
-      loadData()
-    }
+    chrome.tabs.onActivated.addListener(handleTabChange)
+    chrome.tabs.onUpdated.addListener(handleTabChange)
 
-    // Listen for tab changes
-    chrome.tabs.onActivated.addListener(tabChangeListener)
-    chrome.tabs.onUpdated.addListener(tabChangeListener)
-
-    // Clean up listeners on unmount
     return () => {
+      clearTimeout(debounceTimerRef.current)
       storage.unwatch({
         [STORAGE_KEYS.currentPageDomains]: handleStorageChange,
         [STORAGE_KEYS.domainPages]: handleStorageChange
       })
-      chrome.tabs.onActivated.removeListener(tabChangeListener)
-      chrome.tabs.onUpdated.removeListener(tabChangeListener)
+      chrome.tabs.onActivated.removeListener(handleTabChange)
+      chrome.tabs.onUpdated.removeListener(handleTabChange)
     }
-  }, [])
+  }, [loadData])
 
-  const handleClearHistory = async () => {
+  const handleClearHistory = useCallback(async () => {
     try {
       const storage = new Storage({ area: "local" })
       await storage.set(STORAGE_KEYS.domainPages, {})
-      setDomainPages({})
-      setError("")
+      setHistoryState({ domainPages: {} })
     } catch (err) {
-      setError("Error clearing history")
+      setCurrentPageState((prev) => ({
+        ...prev,
+        error: "Error clearing history"
+      }))
     }
-  }
-
-  const formatTimeAgo = (timestamp: number) => {
-    return formatDistance(timestamp, Date.now(), { addSuffix: true })
-  }
-
-  if (isLoading) {
-    return <div className="p-4 dark:text-gray-200">Loading...</div>
-  }
+  }, [])
 
   return (
     <>
       <Header />
       <div className="h-screen overflow-y-auto bg-white dark:bg-gray-900">
         <div className="p-4">
-          {/* Current page trackers */}
-          <section className="mb-6">
-            <h2 className="text-lg font-bold mb-2 text-primary-900 dark:text-gray-100">
-              Current Page Trackers
-            </h2>
-            {error ? (
-              <p className="text-error dark:text-red-400 mb-2">{error}</p>
-            ) : currentUrl ? (
-              currentPage?.domains?.length > 0 ? (
-                <>
-                  <ul className="space-y-2">
-                    {currentPage.domains.map((domain, index) => (
-                      <li
-                        key={index}
-                        className="bg-primary-50 dark:bg-gray-800 p-2 rounded border border-primary-200 dark:border-gray-700 dark:text-gray-200">
-                        {domain.url}
-                        <StatusBadge statusCode={domain.status} />
-                      </li>
-                    ))}
-                  </ul>
-                  <p className="text-sm text-secondary-500 dark:text-gray-400 mt-2">
-                    Detected {formatTimeAgo(currentPage.timestamp)}
-                  </p>
-                </>
-              ) : (
-                <p className="text-secondary-600 dark:text-gray-400">
-                  No Mautic/ACS trackers detected on this page
-                </p>
-              )
-            ) : (
-              <p className="text-secondary-600 dark:text-gray-400">
-                Please navigate to a webpage to detect Mautic/ACS trackers
-              </p>
-            )}
-          </section>
+          <CurrentPageTrackers
+            error={currentPageState.error}
+            currentUrl={currentPageState.currentUrl}
+            currentPage={currentPageState.currentPage}
+            isLoading={currentPageState.isLoading}
+          />
 
-          {/* History */}
-          <section>
-            <div className="flex justify-between items-center mb-2">
-              <h2 className="text-lg font-bold text-primary-900 dark:text-gray-100">
-                History
-              </h2>
-              {Object.keys(domainPages).length > 0 && (
-                <button
-                  onClick={handleClearHistory}
-                  className="text-sm text-primary-600 dark:text-blue-400 hover:underline transition-colors">
-                  Clear History
-                </button>
-              )}
-            </div>
-            {Object.keys(domainPages).length > 0 ? (
-              <div className="space-y-4">
-                {Object.entries(domainPages).map(([domain, pages]) => (
-                  <div
-                    key={domain}
-                    className="bg-primary-50 dark:bg-gray-800 p-3 rounded border border-primary-200 dark:border-gray-700">
-                    <h3 className="font-semibold text-primary-700 dark:text-gray-200">
-                      {domain}
-                    </h3>
-                    <ul className="mt-2 space-y-2">
-                      {[...pages]
-                        .sort((a, b) => b.timestamp - a.timestamp)
-                        .slice(0, 3)
-                        .map((page, index) => (
-                          <li key={index} className="text-sm">
-                            <span className="text-primary-700 dark:text-gray-300 font-medium block">
-                              {page.title || "Untitled Page"}
-                            </span>
-                            <span className="text-secondary-700 dark:text-gray-400 truncate block text-xs">
-                              <a
-                                href={page.url}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="hover:text-primary-600 dark:hover:text-blue-400 hover:underline">
-                                {page.url}
-                              </a>
-                            </span>
-                            <span className="block text-secondary-400 dark:text-gray-500 text-xs">
-                              {formatTimeAgo(page.timestamp)}
-                            </span>
-                          </li>
-                        ))}
-                      {pages.length > 3 && (
-                        <li className="text-sm text-secondary-500 dark:text-gray-400 italic">
-                          ...and {pages.length - 3} more pages
-                        </li>
-                      )}
-                    </ul>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <p className="text-secondary-600 dark:text-gray-400">
-                No history available
-              </p>
-            )}
-          </section>
-
-          {/* Debug info */}
-          <section className="mt-4 p-2 bg-gray-100 dark:bg-gray-800 rounded text-xs">
-            <details>
-              <summary className="cursor-pointer">Debug Info</summary>
-              <pre className="mt-2 overflow-x-auto">
-                {JSON.stringify(
-                  {
-                    currentUrl,
-                    currentPage,
-                    domainPagesCount: Object.keys(domainPages).length,
-                    timestamp: Date.now()
-                  },
-                  null,
-                  2
-                )}
-              </pre>
-            </details>
-          </section>
+          <History
+            domainPages={historyState.domainPages}
+            onClearHistory={handleClearHistory}
+          />
         </div>
       </div>
     </>
