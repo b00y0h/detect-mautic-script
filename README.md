@@ -7,12 +7,21 @@ A Chrome extension that automatically detects Mautic marketing automation instal
 - Automatically scans websites for Mautic installations
 - Shows a green checkmark badge when Mautic is detected
 - Displays the Mautic domain in the tooltip
+- Detailed sidepanel interface showing:
+  - Current page Mautic trackers
+  - Historical tracking data
+  - Debug information
 - Stores history of detected Mautic installations
 - Works in real-time as you browse
 
 ## How It Works
 
-The extension checks for Mautic-specific indicators on web pages you visit. When a Mautic installation is detected, the extension icon will display a green checkmark (✓). You can hover over the icon to see the detected Mautic domain.
+The extension checks for Mautic-specific indicators on web pages you visit. When a Mautic installation is detected, the extension icon will display a green checkmark (✓). Click the extension icon to open the sidepanel interface, which shows:
+
+- Current Page Trackers: Displays any Mautic domains detected on the current page
+- History: View a list of all detected Mautic installations across different websites
+- Timestamps for when trackers were detected
+- Debug information for troubleshooting
 
 ## Privacy
 
